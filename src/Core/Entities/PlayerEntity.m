@@ -703,6 +703,8 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	{
 		OOSystemID old = info_system_id;
 		info_system_id = sid;
+		JSContext *context = OOJSAcquireContext();
+		ShipScriptEvent(context, self, "infoSystemWillChange", INT_TO_JSVAL(info_system_id), INT_TO_JSVAL(old));
 		if (gui_screen == GUI_SCREEN_LONG_RANGE_CHART || gui_screen == GUI_SCREEN_SHORT_RANGE_CHART)
 		{
 			if(moveChart)
@@ -714,7 +716,7 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 		{
 			if(gui_screen == GUI_SCREEN_SYSTEM_DATA)
 			{
-				[self setGuiToSystemDataScreen];
+				[self setGuiToSystemDataScreenRefreshBackground: YES];
 			}
 			if(moveChart)
 			{
@@ -724,7 +726,6 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 				target_chart_focus = chart_focus_coordinates;
 			}
 		}
-		JSContext *context = OOJSAcquireContext();
 		ShipScriptEvent(context, self, "infoSystemChanged", INT_TO_JSVAL(info_system_id), INT_TO_JSVAL(old));
 		OOJSRelinquishContext(context);
 	}
@@ -887,7 +888,7 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 		OOTechLevelID techlevel = [[UNIVERSE currentSystemData] oo_intForKey:KEY_TECHLEVEL];
 		OOEconomyID economy = [[UNIVERSE currentSystemData] oo_intForKey:KEY_ECONOMY];
 		[result setObject:[NSNumber numberWithUnsignedShort:government] forKey:@"current_system_government"];
-		[result setObject:[NSNumber numberWithUnsignedInt:techlevel] forKey:@"current_system_techlevel"];
+		[result setObject:[NSNumber numberWithUnsignedInteger:techlevel] forKey:@"current_system_techlevel"];
 		[result setObject:[NSNumber numberWithUnsignedShort:economy] forKey:@"current_system_economy"];
 	}
 	
@@ -5375,6 +5376,7 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 - (void) cycleMultiFunctionDisplay:(NSUInteger) index
 {
 	NSArray *keys = [multiFunctionDisplayText allKeys];
+	NSString *key = nil;
 	if ([keys count] == 0)
 	{
 		[self setMultiFunctionDisplay:index toKey:nil];
@@ -5383,20 +5385,27 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	id current = [multiFunctionDisplaySettings objectAtIndex:index];
 	if (current == [NSNull null])
 	{
-		[self setMultiFunctionDisplay:index toKey:[keys objectAtIndex:0]];
+		key = [keys objectAtIndex:0];
+		[self setMultiFunctionDisplay:index toKey:key];
 	}
 	else
 	{
 		NSUInteger cIndex = [keys indexOfObject:current];
 		if (cIndex == NSNotFound || cIndex + 1 >= [keys count])
 		{
+			key = nil;
 			[self setMultiFunctionDisplay:index toKey:nil];
 		}
 		else 
 		{
-			[self setMultiFunctionDisplay:index toKey:[keys objectAtIndex:(cIndex+1)]];
+			key = [keys objectAtIndex:(cIndex+1)];
+			[self setMultiFunctionDisplay:index toKey:key];
 		}
 	}
+	JSContext *context = OOJSAcquireContext();
+	jsval keyVal = OOJSValueFromNativeObject(context,key);
+	ShipScriptEvent(context, self, "mfdKeyChanged", INT_TO_JSVAL(activeMFD), keyVal);
+	OOJSRelinquishContext(context);
 }
 
 
@@ -5405,6 +5414,9 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	activeMFD = (activeMFD + 1) % [[self hud] mfdCount];
 	NSUInteger mfdID = activeMFD + 1;
 	[UNIVERSE addMessage:OOExpandKey(@"mfd-N-selected", mfdID) forCount:3.0 ];
+	JSContext *context = OOJSAcquireContext();
+	ShipScriptEvent(context, self, "selectedMFDChanged", INT_TO_JSVAL(activeMFD));
+	OOJSRelinquishContext(context);
 }
 
 
@@ -6326,7 +6338,7 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	if ([UNIVERSE displayGUI]) [self switchToMainView];	// Clear the F7 screen!
 	[UNIVERSE setViewDirection:VIEW_FORWARD];
 	
-	if ([self status] == STATUS_DEAD) return NO;
+	if ([self status] == STATUS_DEAD)  return nil;
 	
 	/*
 		While inside the escape pod, we need to block access to all player.ship properties,
@@ -6819,8 +6831,6 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	NSParameterAssert(station != nil);
 	if ([self status] == STATUS_DEAD)  return;
 	
-	OOProfilerStartMarker(@"dock");
-	
 	[self setStatus:STATUS_DOCKING];
 	[self setDockedStation:station];
 	[self doScriptEvent:OOJSID("shipWillDockWithStation") withArgument:station];
@@ -6857,8 +6867,6 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 
 - (void) docked
 {
-	OOProfilerPointMarker(@"-docked called");
-	
 	StationEntity *dockedStation = [self dockedStation];
 	if (dockedStation == nil)
 	{
@@ -6955,8 +6963,6 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	
 	// When a mission screen is started, any on-screen message is removed immediately.
 	[self doWorldEventUntilMissionScreen:OOJSID("missionScreenOpportunity")];	// also displays docking reports first.
-	
-	OOProfilerEndMarker(@"dock");
 }
 
 
@@ -6964,8 +6970,6 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 {
 	if (station == nil)  return;
 	NSParameterAssert(station == [self dockedStation]);
-	
-	OOProfilerStartMarker(@"undock");
 	
 	// ensure we've not left keyboard entry on
 	[[UNIVERSE gameView] allowStringInput: NO];
@@ -7055,16 +7059,12 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	[demoShip release];
 	demoShip = nil;
 	
-	OOProfilerEndMarker(@"undock");
-	
 	[self playLaunchFromStation];
 }
 
 
 - (void) witchStart
 {
-	OOProfilerStartMarker(@"witchspace");
-	
 	// chances of entering witchspace with autopilot on are very low, but as Berlios bug #18307 has shown us, entirely possible
 	// so in such cases we need to ensure that at least the docking music stops playing
 	if (autopilot_engaged)  [self disengageAutopilot];
@@ -7119,7 +7119,6 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	
 	chart_centre_coordinates = galaxy_coordinates;
 	target_chart_centre = chart_centre_coordinates;
-	OOProfilerEndMarker(@"witchspace");
 }
 
 
@@ -7912,6 +7911,31 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 }
 
 
+- (BOOL) setPrimedEquipment:(NSString *)eqKey showMessage:(BOOL)showMsg
+{
+	NSUInteger c = [eqScripts count];
+	NSUInteger current = primedEquipment;
+	primedEquipment = [self eqScriptIndexForKey:eqKey];	// if key not found primedEquipment is set to primed-none
+	BOOL unprimeEq = [eqKey isEqualToString:@""];
+	BOOL result = YES;
+
+	if (primedEquipment == c && !unprimeEq)
+	{
+		primedEquipment = current;
+		result = NO;
+	}
+	else 
+	{
+		if (primedEquipment != current && showMsg == YES)
+		{
+			NSString *equipmentName = [[OOEquipmentType equipmentTypeWithIdentifier:[[eqScripts oo_arrayAtIndex:primedEquipment] oo_stringAtIndex:0]] name];
+			[UNIVERSE addMessage:unprimeEq ? OOExpandKey(@"equipment-primed-none") : OOExpandKey(@"equipment-primed", equipmentName) forCount:2.0];
+		}
+	}
+	return result;
+}
+
+
 - (void) activatePrimableEquipment:(NSUInteger)index withMode:(OOPrimedEquipmentMode)mode
 {
 	// index == [eqScripts count] means we don't want to activate any equipment.
@@ -8146,8 +8170,12 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 	return [self contractsListForScriptingFromArray:contracts forCargo:YES];
 }
 
-
 - (void) setGuiToSystemDataScreen
+{
+	[self setGuiToSystemDataScreenRefreshBackground: NO];
+}
+
+- (void) setGuiToSystemDataScreenRefreshBackground: (BOOL) refreshBackground
 {
 	NSDictionary	*infoSystemData;
 	NSString		*infoSystemName;
@@ -8190,7 +8218,7 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 		NSString	*system_desc =		[infoSystemData oo_stringForKey:KEY_DESCRIPTION];
 
 		NSString    *populationDesc =   [infoSystemData oo_stringForKey:KEY_POPULATION_DESC
-															 defaultValue:OOExpandKeyWithSeed(kNilRandomSeed, @"sysdata-pop-value", population, inhabitants)];
+															 defaultValue:OOExpandKeyWithSeed(kNilRandomSeed, @"sysdata-pop-value", population)];
 
 		if (sunGoneNova)
 		{
@@ -8206,11 +8234,11 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 				NSString *system = infoSystemName;
 				system_desc = OOExpandKeyWithSeed(infoSystemRandomSeed, @"nova-system-description", system);
 			}
-			populationDesc = OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-pop-value", population, inhabitants);
+			populationDesc = OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-pop-value", population);
 		}
 
 		
-		[gui clearAndKeepBackground:!guiChanged];
+		[gui clearAndKeepBackground:!refreshBackground && !guiChanged];
 		[UNIVERSE removeDemoShips];
 
 		if (concealment < OO_SYSTEMCONCEALMENT_NONAME)
@@ -8234,50 +8262,6 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 		}
 		else
 		{
-			NSArray *populationDescLines = [populationDesc componentsSeparatedByString:@"\n"];
-			NSString *populationDesc1 = [populationDescLines objectAtIndex:0];
-			NSString *populationDesc2 = [populationDescLines lastObject];
-			
-			if ([populationDesc1 isEqualToString:populationDesc2])  populationDesc2 = @"";
-		
-			[gui setArray:[NSArray arrayWithObjects:
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-eco"),
-						   economy_desc,
-						   nil]
-			   	   forRow:1];
-			[gui setArray:[NSArray arrayWithObjects:
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-govt"),
-						   government_desc,
-						   nil]
-				   forRow:3];
-			[gui setArray:[NSArray arrayWithObjects:
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-tl"),
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-tl-value", techLevel),
-						   nil]
-				   forRow:5];
-			[gui setArray:[NSArray arrayWithObjects:
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-pop"),
-						   populationDesc1,
-						   nil]
-				   forRow:7];
-			[gui setArray:[NSArray arrayWithObjects:@"",
-						   populationDesc2,
-						   nil]
-				   forRow:8];
-			[gui setArray:[NSArray arrayWithObjects:
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-prod"),
-						   @"",
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-prod-value", productivity),
-					   	nil]
-				   forRow:10];
-			[gui setArray:[NSArray arrayWithObjects:
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-radius"),
-						   @"",
-						   OOExpandKeyWithSeed(infoSystemRandomSeed, @"sysdata-radius-value",
-											   radius),
-					   	nil]
-				   forRow:12];
-
 			NSPoint infoSystemCoordinates = [[UNIVERSE systemManager] getCoordinatesForSystem: info_system_id inGalaxy: galaxy_number];
 			double distance = distanceBetweenPlanetPositions(infoSystemCoordinates.x, infoSystemCoordinates.y, galaxy_coordinates.x, galaxy_coordinates.y);
 			if(distance == 0.0 && info_system_id != system_id)
@@ -8308,13 +8292,57 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 							DESC_PLURAL(@"sysdata-route-jumps", routeJumps)];
 				}
 			}
-			[gui setArray:[NSArray arrayWithObjects:
-						@"Distance:",
-						distanceInfo,
-						nil]
-				forRow: 14];
-		
-			OOGUIRow i = [gui addLongText:system_desc startingAtRow:17 align:GUI_ALIGN_LEFT];
+
+			OOGUIRow i;
+
+			for (i = 1; i <= 16; i++) {
+				NSString *ln = [NSString stringWithFormat:@"sysdata-line-%ld", (long)i];
+				NSString *line = OOExpandKeyWithSeed(infoSystemRandomSeed, ln, economy_desc, government_desc, techLevel, populationDesc, inhabitants, productivity, radius, distanceInfo);
+				if (![line isEqualToString:@""])
+				{
+					NSArray *lines = [line componentsSeparatedByString:@"\t"];
+					if ([lines count] == 1) 
+					{
+						[gui setArray:[NSArray arrayWithObjects:[lines objectAtIndex:0],
+									nil]
+							forRow:i];
+					} 
+					if ([lines count] == 2) 
+					{
+						[gui setArray:[NSArray arrayWithObjects:[lines objectAtIndex:0],
+										[lines objectAtIndex:1],
+									nil]
+							forRow:i];
+					}
+					if ([lines count] == 3) 
+					{
+						if ([[lines objectAtIndex:2] isEqualToString:@""]) 
+						{
+							[gui setArray:[NSArray arrayWithObjects:[lines objectAtIndex:0],
+											[lines objectAtIndex:1],
+										nil]
+								forRow:i];
+						} 
+						else
+						{
+							[gui setArray:[NSArray arrayWithObjects:[lines objectAtIndex:0],
+											[lines objectAtIndex:1],
+											[lines objectAtIndex:2],
+										nil]
+								forRow:i];
+						}
+					}
+				}
+				else 
+				{
+					[gui setArray:[NSArray arrayWithObjects:@"",
+								nil]
+						forRow:i];
+				}
+			}
+
+
+			i = [gui addLongText:system_desc startingAtRow:17 align:GUI_ALIGN_LEFT];
 			missionTextRow = i;
 			for (i-- ; i > 16 ; --i)
 			{
@@ -8362,12 +8390,12 @@ NSComparisonResult marketSorterByMassUnit(id a, id b, void *market);
 		RANROTSetFullSeed(ranrotSavedSeed);
 	}
 	
-	if (guiChanged)
+	if (refreshBackground || guiChanged)
 	{
 		[gui setForegroundTextureKey:[self status] == STATUS_DOCKED ? @"docked_overlay" : @"overlay"];
 		[gui setBackgroundTextureKey:sunGoneNova ? @"system_data_nova" : @"system_data"];
 		
-		[self noteGUIDidChangeFrom:oldScreen to:gui_screen];
+		[self noteGUIDidChangeFrom:oldScreen to:gui_screen refresh: refreshBackground];
 		[self checkScript];	// Still needed by some OXPs?
 	}
 }
@@ -9820,8 +9848,14 @@ static NSString *last_outfitting_key=nil;
 
 - (void) noteGUIDidChangeFrom:(OOGUIScreenID)fromScreen to:(OOGUIScreenID)toScreen
 {
+	[self noteGUIDidChangeFrom: fromScreen to: toScreen refresh: NO];
+}
+
+
+- (void) noteGUIDidChangeFrom:(OOGUIScreenID)fromScreen to:(OOGUIScreenID)toScreen refresh: (BOOL) refresh
+{
 	// No events triggered if we're changing screens while paused, or if screen never actually changed.
-	if (fromScreen != toScreen)
+	if (fromScreen != toScreen || refresh)
 	{
 		// MKW - release GUI Screen ship, if we have one
 		switch (fromScreen)

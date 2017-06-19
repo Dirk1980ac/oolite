@@ -990,6 +990,7 @@ typedef enum
 
 - (void) setGuiToStatusScreen;
 - (NSArray *) equipmentList;	// Each entry is an array with a string followed by a boolean indicating availability (NO = damaged).
+- (BOOL) setPrimedEquipment:(NSString *)eqKey showMessage:(BOOL)showMsg;
 - (NSString *) primedEquipmentName:(NSInteger)offset;
 - (NSUInteger) primedEquipmentCount;
 - (void) activatePrimableEquipment:(NSUInteger)index withMode:(OOPrimedEquipmentMode)mode;
@@ -1003,6 +1004,7 @@ typedef enum
 - (unsigned) legalStatusOfCargoList;
 
 - (void) setGuiToSystemDataScreen;
+- (void) setGuiToSystemDataScreenRefreshBackground: (BOOL) refreshBackground;
 - (NSDictionary *) markedDestinations;
 - (void) setGuiToLongRangeChartScreen;
 - (void) setGuiToShortRangeChartScreen;
@@ -1040,6 +1042,7 @@ typedef enum
 - (void) setGuiToOXZManager;
 
 - (void) noteGUIWillChangeTo:(OOGUIScreenID)toScreen;
+- (void) noteGUIDidChangeFrom:(OOGUIScreenID)fromScreen to:(OOGUIScreenID)toScreen refresh: (BOOL) refresh;
 - (void) noteGUIDidChangeFrom:(OOGUIScreenID)fromScreen to:(OOGUIScreenID)toScreen;
 - (void) noteViewDidChangeFrom:(OOViewID)fromView toView:(OOViewID)toView;
 
