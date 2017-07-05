@@ -1407,16 +1407,21 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 	NSSize		titleCharacterSize = pixel_title_size;
 	
 	// do backdrop
-	//
+	// don't draw it if docked, unless message_gui is permanent
+	// don't draw it on the intro screens
 	if (backgroundColor)
 	{
-		OOGL(glColor4f([backgroundColor redComponent], [backgroundColor greenComponent], [backgroundColor blueComponent], alpha * [backgroundColor alphaComponent]));
-		OOGLBEGIN(GL_QUADS);
-			glVertex3f(x + 0.0f,					y + 0.0f,					z);
-			glVertex3f(x + size_in_pixels.width,	y + 0.0f,					z);
-			glVertex3f(x + size_in_pixels.width,	y + size_in_pixels.height,	z);
-			glVertex3f(x + 0.0f,					y + size_in_pixels.height,	z);
-		OOGLEND();
+		int playerStatus = [PLAYER status];
+		if (playerStatus != STATUS_START_GAME && playerStatus != STATUS_DEAD)
+		{
+			OOGL(glColor4f([backgroundColor redComponent], [backgroundColor greenComponent], [backgroundColor blueComponent], alpha * [backgroundColor alphaComponent]));
+			OOGLBEGIN(GL_QUADS);
+				glVertex3f(x + 0.0f,					y + 0.0f,					z);
+				glVertex3f(x + size_in_pixels.width,	y + 0.0f,					z);
+				glVertex3f(x + size_in_pixels.width,	y + size_in_pixels.height,	z);
+				glVertex3f(x + 0.0f,					y + size_in_pixels.height,	z);
+			OOGLEND();
+		}
 	}
 	
 	// show the 'foreground', aka overlay!
