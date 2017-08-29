@@ -5,6 +5,9 @@
 		{ /* Targeting enhancement */
 			"equipment_required" = "EQ_SCANNER_SHOW_MISSILE_TARGET";
 			selector = "drawTargetReticle:";
+			target_rgba = "greenColor";
+			target_sensitive_rgba = "redColor";
+			wormhole_rgba = "cyanColor";
 		},
 		{	// Waypoint display
 			equipment_required 	= "EQ_ADVANCED_COMPASS";
@@ -294,7 +297,7 @@
 		background_automatic = yes;
 		// default background transparent
 		background_rgba = "0.0 0.05 0.45 0.0";
-		text_standard_color = "yellowColor";
+		text_color = "yellowColor";
 		text_comms_color = "greenColor";
 	};
 	comm_log_gui = {

@@ -112,6 +112,7 @@ static BOOL				speechGenderSelectKeyPressed;
 #endif
 static BOOL				wait_for_key_up;
 static BOOL				upDownKeyPressed;
+static BOOL				pageUpDownKeyPressed;
 static BOOL				leftRightKeyPressed;
 static BOOL				musicModeKeyPressed;
 static BOOL				volumeControlPressed;
@@ -529,6 +530,7 @@ static NSTimeInterval	time_last_frame;
 		[UNIVERSE removeDemoShips];
 	}
 	[(MyOpenGLView *)[UNIVERSE gameView] allowStringInput:NO];
+	if ([self isMouseControlOn])  [[UNIVERSE gameView] resetMouse];
 	[UNIVERSE enterGUIViewModeWithMouseInteraction:NO];
 	[self noteGUIDidChangeFrom:oldScreen to:gui_screen];
 }
@@ -910,16 +912,20 @@ static NSTimeInterval	time_last_frame;
 				// DJS: Thrust can be an axis or a button. Axis takes precidence.
 				double reqSpeed=[stickHandler getAxisState: AXIS_THRUST];
 				// Updated DJS original code to fix BUG #17482 - (Getafix 2010/09/13)
-				if (([gameView isDown:key_increase_speed] || joyButtonState[BUTTON_INCTHRUST])&&(flightSpeed < maxFlightSpeed)&&(!afterburner_engaged))
+				if (([gameView isDown:key_increase_speed] ||
+						joyButtonState[BUTTON_INCTHRUST] ||
+						((mouse_control_on)&&([gameView mouseWheelState] == gvMouseWheelUp) && !([UNIVERSE viewDirection] && [gameView isCapsLockOn])))
+					&& (flightSpeed < maxFlightSpeed) && (!afterburner_engaged))
 				{
 					flightSpeed += speed_delta * delta_t;
 				}
-					
-				// ** tgape ** - decrease obviously means no hyperspeed
-				if (([gameView isDown:key_decrease_speed] || joyButtonState[BUTTON_DECTHRUST])&&(!afterburner_engaged))
+				
+				if (([gameView isDown:key_decrease_speed] ||
+						joyButtonState[BUTTON_DECTHRUST] ||
+						((mouse_control_on)&&([gameView mouseWheelState] == gvMouseWheelDown) && !([UNIVERSE viewDirection] && [gameView isCapsLockOn])))
+					&& (!afterburner_engaged))
 				{
-					flightSpeed -= speed_delta * delta_t;
-						
+					flightSpeed -= speed_delta * delta_t;	
 					// ** tgape ** - decrease obviously means no hyperspeed
 					hyperspeed_engaged = NO;
 				}
@@ -2133,15 +2139,15 @@ static NSTimeInterval	time_last_frame;
 		case GUI_SCREEN_STICKMAPPER:
 			[self stickMapperInputHandler: gui view: gameView];
 
-			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right] || [gameView isDown:key_gui_arrow_left];
+			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right] || [gameView isDown:key_gui_arrow_left] || [gameView isDown:gvPageUpKey] || [gameView isDown:gvPageDownKey];
 			if (leftRightKeyPressed)
 			{
 				NSString *key = [gui keyForRow: [gui selectedRow]];
-				if ([gameView isDown:key_gui_arrow_right])
+				if ([gameView isDown:key_gui_arrow_right] || [gameView isDown:gvPageDownKey])
 				{
 					key = [gui keyForRow:GUI_ROW_FUNCEND];
 				}
-				if ([gameView isDown:key_gui_arrow_left])
+				if ([gameView isDown:key_gui_arrow_left] || [gameView isDown:gvPageUpKey])
 				{
 					key = [gui keyForRow:GUI_ROW_FUNCSTART];
 				}
@@ -2320,7 +2326,7 @@ static NSTimeInterval	time_last_frame;
 					[self showInformationForSelectedUpgrade];
 			}
 			
-			if ([gameView isDown:key_gui_arrow_left])
+			if ([gameView isDown:key_gui_arrow_left] || [gameView isDown:gvPageUpKey])
 			{
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
 				{
@@ -2333,7 +2339,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			if ([gameView isDown:key_gui_arrow_right])
+			if ([gameView isDown:key_gui_arrow_right] || [gameView isDown:gvPageDownKey])
 			{
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
 				{
@@ -2346,7 +2352,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left];
+			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left]|[gameView isDown:gvPageDownKey]|[gameView isDown:gvPageUpKey];
 			
 			if ([gameView isDown:13] || [gameView isDown:gvMouseDoubleClick])   // 'enter'
 			{
@@ -2372,7 +2378,7 @@ static NSTimeInterval	time_last_frame;
 			{
 				[self showInformationForSelectedInterface];
 			}
-			if ([gameView isDown:key_gui_arrow_left])
+			if ([gameView isDown:key_gui_arrow_left] || [gameView isDown:gvPageUpKey])
 			{
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
 				{
@@ -2385,7 +2391,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			if ([gameView isDown:key_gui_arrow_right])
+			if ([gameView isDown:key_gui_arrow_right] || [gameView isDown:gvPageDownKey])
 			{
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
 				{
@@ -2398,7 +2404,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left];
+			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left]|[gameView isDown:gvPageDownKey]|[gameView isDown:gvPageUpKey];
 			if ([gameView isDown:13] || [gameView isDown:gvMouseDoubleClick])   // 'enter'
 			{
 				if ([gameView isDown:gvMouseDoubleClick])
@@ -2490,7 +2496,7 @@ static NSTimeInterval	time_last_frame;
 			break;
 		case GUI_SCREEN_STATUS:
 			[self handleGUIUpDownArrowKeys];
-			if ([gameView isDown:key_gui_arrow_left])
+			if ([gameView isDown:key_gui_arrow_left] || [gameView isDown:gvPageUpKey])
 			{
 
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
@@ -2505,7 +2511,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			if ([gameView isDown:key_gui_arrow_right])
+			if ([gameView isDown:key_gui_arrow_right] || [gameView isDown:gvPageDownKey])
 			{
 
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
@@ -2521,7 +2527,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left];
+			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left]|[gameView isDown:gvPageDownKey]|[gameView isDown:gvPageUpKey];
 			
 			if ([gameView isDown:13] || [gameView isDown:gvMouseDoubleClick])   // 'enter'
 			{
@@ -2546,7 +2552,7 @@ static NSTimeInterval	time_last_frame;
 			break;
 		case GUI_SCREEN_MANIFEST:
 			[self handleGUIUpDownArrowKeys];
-			if ([gameView isDown:key_gui_arrow_left])
+			if ([gameView isDown:key_gui_arrow_left] || [gameView isDown:gvPageUpKey])
 			{
 
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
@@ -2561,7 +2567,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			if ([gameView isDown:key_gui_arrow_right])
+			if ([gameView isDown:key_gui_arrow_right] || [gameView isDown:gvPageDownKey])
 			{
 				OOGUIRow nextRow = MANIFEST_SCREEN_ROW_NEXT;
 				if ([[self hud] isHidden] || [[self hud] allowBigGui])
@@ -2580,7 +2586,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left];
+			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left]|[gameView isDown:gvPageDownKey]|[gameView isDown:gvPageUpKey];
 			
 			if ([gameView isDown:13] || [gameView isDown:gvMouseDoubleClick])   // 'enter'
 			{
@@ -2610,7 +2616,7 @@ static NSTimeInterval	time_last_frame;
 				[self showShipyardInfoForSelection];
 			}
 			
-			if ([gameView isDown:key_gui_arrow_left])
+			if ([gameView isDown:key_gui_arrow_left] || [gameView isDown:gvPageUpKey])
 			{
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
 				{
@@ -2623,7 +2629,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			if ([gameView isDown:key_gui_arrow_right])
+			if ([gameView isDown:key_gui_arrow_right] || [gameView isDown:gvPageDownKey])
 			{
 				if ((!leftRightKeyPressed)||(script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
 				{
@@ -2636,7 +2642,7 @@ static NSTimeInterval	time_last_frame;
 					timeLastKeyPress = script_time;
 				}
 			}
-			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left];
+			leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left]|[gameView isDown:gvPageDownKey]|[gameView isDown:gvPageUpKey];
 			
 			if ([gameView isDown:13])   // 'enter' NOT double-click
 			{
@@ -2739,6 +2745,56 @@ static NSTimeInterval	time_last_frame;
 		[self handleGUIUpDownArrowKeys];
 		DESTROY(marketSelectedCommodity);
 		marketSelectedCommodity = [[gui selectedRowKey] retain];
+
+		BOOL			page_up = [gameView isDown:gvPageUpKey];
+		BOOL			page_down = [gameView isDown:gvPageDownKey];
+		if (page_up || page_down) 
+		{
+			if ((!pageUpDownKeyPressed) || (script_time > timeLastKeyPress + KEY_REPEAT_INTERVAL))
+			{
+				OOCommodityMarket	*localMarket = [self localMarket];
+				NSArray 			*goods = [self applyMarketSorter:[self applyMarketFilter:[localMarket goods] onMarket:localMarket] onMarket:localMarket];
+				if ([goods count] > 0)
+				{
+					NSInteger goodsIndex = [goods indexOfObject:marketSelectedCommodity];
+					NSInteger offset1 = 0;
+					NSInteger offset2 = 0;
+					if ([[gui keyForRow:GUI_ROW_MARKET_START] isEqualToString:@"<<<"] == true) offset1 += 1;
+					if ([[gui keyForRow:GUI_ROW_MARKET_LAST] isEqualToString:@">>>"] == true) offset2 += 1;
+					if (page_up)
+					{
+						[self playMenuPagePrevious];
+						// some edge cases
+						if (goodsIndex - 16 <= 0) 
+						{
+							offset1 = 0;
+							offset2 = 0;
+						}
+						if (offset1 == 1 && offset2 == 0 && goodsIndex < (NSInteger)[goods count] - 1 && goodsIndex - 15 > 0) offset2 = 1;
+						goodsIndex -= (16 - (offset1 + offset2));
+						if (goodsIndex < 0) goodsIndex = 0;
+						if ([goods count] <= 17) goodsIndex = 0;
+					}
+					if (page_down) 
+					{
+						[self playMenuPageNext];
+						// some edge cases
+						if (offset1 == 0 && offset2 == 1 && goodsIndex > 1) offset1 = 1;
+						if (offset2 == 1 && goodsIndex + 15 == (NSInteger)[goods count] - 1) offset2 = 0;
+						goodsIndex += (16 - (offset1 + offset2));
+						if (goodsIndex > ((NSInteger)[goods count] - 1) || [goods count] <= 17) goodsIndex = (NSInteger)[goods count] - 1;
+					}
+					DESTROY(marketSelectedCommodity);
+					marketSelectedCommodity = [[goods oo_stringAtIndex:goodsIndex] retain];
+					[self setGuiToMarketScreen];
+				}
+			} 
+			pageUpDownKeyPressed = YES;
+			timeLastKeyPress = script_time;
+		}
+		else {
+			pageUpDownKeyPressed = NO;
+		}
 	}
 	else
 	{
@@ -3362,6 +3418,7 @@ static NSTimeInterval	time_last_frame;
 	static BOOL mouse_clicked = NO;
 	static NSPoint mouse_clicked_position;
 	static BOOL shift_down;
+	static BOOL caps_on = NO;
 	static NSTimeInterval last_time = 0.0;
 	MyOpenGLView *gameView = [UNIVERSE gameView];
 	if ([gameView isDown:key_custom_view])
@@ -3385,6 +3442,8 @@ static NSTimeInterval	time_last_frame;
 	NSTimeInterval this_time = [NSDate timeIntervalSinceReferenceDate];
 	if ([UNIVERSE viewDirection] && [gameView isCapsLockOn])
 	{
+		if (!caps_on)  caps_on = YES;
+		
 		OOTimeDelta delta_t = this_time - last_time;
 		if (([gameView isDown:gvPageDownKey] && ![gameView isDown:gvPageUpKey]) || [gameView mouseWheelState] == gvMouseWheelDown)
 		{
@@ -3491,6 +3550,11 @@ static NSTimeInterval	time_last_frame;
 	else
 	{
 		mouse_clicked = NO;
+		if (caps_on)
+		{
+			caps_on = NO;
+			if ([self isMouseControlOn])  [gameView resetMouse];
+		}
 	}
 	last_time = this_time;
 }
@@ -4340,6 +4404,34 @@ static BOOL autopilot_pause;
 				[self showScenarioDetails];
 			}
 
+			if (!pageUpDownKeyPressed) 
+			{
+				if ([gameView isDown:gvPageUpKey])
+				{
+					//  find the Back <<< line, select it and press it
+					if ([[gui keyForRow:GUI_ROW_SCENARIOS_START - 1] hasPrefix:@"__page"]) 
+					{
+						if ([gui setSelectedRow:GUI_ROW_SCENARIOS_START - 1]) 
+						{
+							[self startScenario];
+						}
+					}
+
+				}
+				else if ([gameView isDown:gvPageDownKey])
+				{
+					// find the Next >>> line, select it and press it
+					if ([[gui keyForRow:GUI_ROW_SCENARIOS_START + GUI_MAX_ROWS_SCENARIOS] hasPrefix:@"__page"]) 
+					{
+						if ([gui setSelectedRow:GUI_ROW_SCENARIOS_START + GUI_MAX_ROWS_SCENARIOS]) 
+						{
+							[self startScenario];
+						}
+					}
+				}
+			}
+			pageUpDownKeyPressed = [gameView isDown:gvPageDownKey]|[gameView isDown:gvPageUpKey];
+
 			if (!selectPressed)
 			{
 				if ([gameView isDown:13] || [gameView isDown:gvMouseDoubleClick]) // enter
@@ -4379,21 +4471,21 @@ static BOOL autopilot_pause;
 						// only has an effect on install/remove selection screens
 						[oxzmanager showOptionsUpdate];
 					}
-					if ([gameView isDown:key_gui_arrow_left])
+					if ([gameView isDown:key_gui_arrow_left] || [gameView isDown:gvPageUpKey])
 					{
 						if ((!leftRightKeyPressed))
 						{
 							[oxzmanager processOptionsPrev];
 						}
 					}
-					else if ([gameView isDown:key_gui_arrow_right])
+					else if ([gameView isDown:key_gui_arrow_right] || [gameView isDown:gvPageDownKey])
 					{
 						if ((!leftRightKeyPressed))
 						{
 							[oxzmanager processOptionsNext];
 						}
 					}
-					leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left];
+					leftRightKeyPressed = [gameView isDown:key_gui_arrow_right]|[gameView isDown:key_gui_arrow_left]|[gameView isDown:gvPageDownKey]|[gameView isDown:gvPageUpKey];
 
 					if (!selectPressed)
 					{
