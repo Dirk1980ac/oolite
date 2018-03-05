@@ -1039,7 +1039,22 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 
 		switch (spec) 
 		{
+		case GUI_BACKGROUND_SPECIAL_CUSTOM:
+		case GUI_BACKGROUND_SPECIAL_CUSTOM_ANA_SHORTEST:
+		case GUI_BACKGROUND_SPECIAL_CUSTOM_ANA_QUICKEST:
+			bgDescriptor = [UNIVERSE screenTextureDescriptorForKey:@"custom_chart_mission"];
+			if (bgDescriptor == nil) 
+			{
+				bgDescriptor = [UNIVERSE screenTextureDescriptorForKey:@"short_range_chart_mission"];
+				if (bgDescriptor == nil) 
+				{
+					bgDescriptor = [UNIVERSE screenTextureDescriptorForKey:@"short_range_chart"];
+				}
+			}
+			break;
 		case GUI_BACKGROUND_SPECIAL_SHORT:
+		case GUI_BACKGROUND_SPECIAL_SHORT_ANA_SHORTEST:
+		case GUI_BACKGROUND_SPECIAL_SHORT_ANA_QUICKEST:
 			bgDescriptor = [UNIVERSE screenTextureDescriptorForKey:@"short_range_chart_mission"];
 			if (bgDescriptor == nil) 
 			{
@@ -1346,7 +1361,13 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 		
 		if (self == [UNIVERSE gui])
 		{
-			if ([player guiScreen] == GUI_SCREEN_SHORT_RANGE_CHART || [player guiScreen] == GUI_SCREEN_LONG_RANGE_CHART || backgroundSpecial == GUI_BACKGROUND_SPECIAL_SHORT)
+			if ([player guiScreen] == GUI_SCREEN_SHORT_RANGE_CHART || [player guiScreen] == GUI_SCREEN_LONG_RANGE_CHART || 
+				backgroundSpecial == GUI_BACKGROUND_SPECIAL_SHORT ||
+				backgroundSpecial == GUI_BACKGROUND_SPECIAL_SHORT_ANA_QUICKEST ||
+				backgroundSpecial == GUI_BACKGROUND_SPECIAL_SHORT_ANA_SHORTEST ||
+				backgroundSpecial == GUI_BACKGROUND_SPECIAL_CUSTOM ||
+				backgroundSpecial == GUI_BACKGROUND_SPECIAL_CUSTOM_ANA_QUICKEST ||
+				backgroundSpecial == GUI_BACKGROUND_SPECIAL_CUSTOM_ANA_SHORTEST)
 			{
 				[self drawStarChart:x - 0.5f * size_in_pixels.width :y - 0.5f * size_in_pixels.height :z :alpha :NO];
 			}
@@ -1782,7 +1803,6 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 				(textRow-1) * MAIN_GUI_ROW_HEIGHT * pixelRatio);
 
 	OOSystemID target = [PLAYER targetSystemID];
-	NSString *targetName = [UNIVERSE getSystemName:target];
 	double dx, dy;
 	
 	// get a list of systems marked as contract destinations
@@ -1838,16 +1858,21 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 		saved_galaxy_id = [player galaxyNumber];
 	}
 	
-	OOSystemID savedPlanetNumber = 0;
-	OOSystemID savedDestNumber = 0;
+	static OOSystemID savedPlanetNumber = 0;
+	static OOSystemID savedDestNumber = 0;
+	static OORouteType savedArrayMode = OPTIMIZED_BY_NONE;
 	static NSDictionary *routeInfo = nil;
 
 	/* May override current mode for mission screens */
-	if (backgroundSpecial == GUI_BACKGROUND_SPECIAL_LONG_ANA_SHORTEST)
+	if (backgroundSpecial == GUI_BACKGROUND_SPECIAL_LONG_ANA_SHORTEST || 
+		backgroundSpecial == GUI_BACKGROUND_SPECIAL_SHORT_ANA_SHORTEST || 
+		backgroundSpecial == GUI_BACKGROUND_SPECIAL_CUSTOM_ANA_SHORTEST)
 	{
 		advancedNavArrayMode = OPTIMIZED_BY_JUMPS;
 	}
-	else if (backgroundSpecial == GUI_BACKGROUND_SPECIAL_LONG_ANA_QUICKEST)
+	else if (backgroundSpecial == GUI_BACKGROUND_SPECIAL_LONG_ANA_QUICKEST ||
+		backgroundSpecial == GUI_BACKGROUND_SPECIAL_SHORT_ANA_QUICKEST ||
+		backgroundSpecial == GUI_BACKGROUND_SPECIAL_CUSTOM_ANA_QUICKEST)
 	{
 		advancedNavArrayMode = OPTIMIZED_BY_TIME;
 	}
@@ -1856,12 +1881,13 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 	{
 		OOSystemID planetNumber = [PLAYER systemID];
 		OOSystemID destNumber = [PLAYER targetSystemID];
-		if (routeInfo == nil || planetNumber != savedPlanetNumber || destNumber != savedDestNumber)
+		if (routeInfo == nil || planetNumber != savedPlanetNumber || destNumber != savedDestNumber || advancedNavArrayMode != savedArrayMode)
 		{
 			[routeInfo release];
 			routeInfo = [[UNIVERSE routeFromSystem:planetNumber toSystem:destNumber optimizedBy:advancedNavArrayMode] retain];
 			savedPlanetNumber = planetNumber;
 			savedDestNumber = destNumber;
+			savedArrayMode = advancedNavArrayMode;
 		}
 		target = destNumber;
 		
@@ -1891,10 +1917,9 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 	{
 		[self drawAdvancedNavArrayAtX:x+hoffset y:y+voffset z:z alpha:alpha usingRoute:nil optimizedBy:OPTIMIZED_BY_NONE zoom: zoom];
 	}
-	NSPoint targetCoordinates = (NSPoint){0,0};
 	if (!routeExists)
 	{
-		targetCoordinates = [systemManager getCoordinatesForSystem:target inGalaxy:galaxy_id];
+		NSPoint targetCoordinates = [systemManager getCoordinatesForSystem:target inGalaxy:galaxy_id];
 
 		distance = distanceBetweenPlanetPositions(targetCoordinates.x,targetCoordinates.y,galaxy_coordinates.x,galaxy_coordinates.y);
 		if (distance == 0.0)
@@ -2027,7 +2052,8 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 				}			
 				OOGL(glColor4f(r, g, b, alpha));
 				break;
-			case OOLRC_MODE_NORMAL:
+			case OOLRC_MODE_UNKNOWN:
+			case OOLRC_MODE_SUNCOLOR:
 				if (EXPECT(noNova))
 				{
 					r = g = b = 1.0;
@@ -2232,7 +2258,7 @@ static OOTextureSprite *NewTextureSpriteWithDescriptor(NSDictionary *descriptor)
 	tab_stops[2] = 288;
 	[self overrideTabs:tab_stops from:kGuiChartTraveltimeTabs length:3];
 	[self setTabStops:tab_stops];
-	targetName = [[UNIVERSE getSystemName:target] retain];
+	NSString *targetName = [[UNIVERSE getSystemName:target] retain];
 
 	// distance-f & est-travel-time-f are identical between short & long range charts in standard Oolite, however can be alterered separately via OXPs
 	NSString *travelDistLine = @"";
